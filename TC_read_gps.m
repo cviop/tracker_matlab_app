@@ -3,7 +3,11 @@ function [gpsData, valid, out] = TC_read_gps(s, disp)
     TC_send_message(s, 1)
     out = read(s, 100, "uint8");
     valid = checkUBXChecksum(out);
+    if ~valid
+        out = zeros(1,100);
+    end
     gpsData = decodeUBXNavPvt(out, disp);
+    
     
 end
 
@@ -43,31 +47,39 @@ end
 
 function [valid, ckA, ckB] = checkUBXChecksum(pkt)
   % pkt must be uint8
-  payloadLen = double(pkt(5)) + 256*double(pkt(6));
-  firstIdx = 3;
-  lastIdx  = 6 + payloadLen;
-  
-  % pull out the bytes we actually want
-  data = double(pkt(firstIdx : lastIdx));  
-
-  % compute Fletcher
-  ckA = uint8(0);
-  ckB = uint8(0);
-  for b = data(:)'
-    ckA = uint8(  bitand( double(ckA) + b, 255 )  );
-    ckB = uint8(  bitand( double(ckB) + double(ckA), 255 )  );
-  end
-
-  % received bytes
-  recvA = pkt(lastIdx+1);
-  recvB = pkt(lastIdx+2);
-
-  if ckA~=recvA || ckB~=recvB
-    warning('UBX:Checksum',...
-      'Computed [0x%02X 0x%02X], got [0x%02X 0x%02X]', ...
-      ckA, ckB, recvA, recvB);
-    valid = false;
+  if numel(pkt) == 100
+      if(pkt(1) == 181 && pkt(2) == 98)
+          payloadLen = double(pkt(5)) + 256*double(pkt(6));
+          firstIdx = 3;
+          lastIdx  = 6 + payloadLen;
+          
+          % pull out the bytes we actually want
+          data = double(pkt(firstIdx : lastIdx));  
+        
+          % compute Fletcher
+          ckA = uint8(0);
+          ckB = uint8(0);
+          for b = data(:)'
+            ckA = uint8(  bitand( double(ckA) + b, 255 )  );
+            ckB = uint8(  bitand( double(ckB) + double(ckA), 255 )  );
+          end
+        
+          % received bytes
+          recvA = pkt(lastIdx+1);
+          recvB = pkt(lastIdx+2);
+        
+          if ckA~=recvA || ckB~=recvB
+            warning('UBX:Checksum',...
+              'Computed [0x%02X 0x%02X], got [0x%02X 0x%02X]', ...
+              ckA, ckB, recvA, recvB);
+            valid = false;
+          else
+            valid = true;
+          end
+      else 
+          valid = false;
+      end
   else
-    valid = true;
+    valid = false;
   end
 end
